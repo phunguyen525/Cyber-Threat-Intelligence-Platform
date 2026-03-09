@@ -22,5 +22,253 @@
         "target_service": "ssh-server",
         "username": "admin",
         "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:00:15",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.10",
+        "target_service": "ssh-server",
+        "username": "admin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:00:20",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.10",
+        "target_service": "ssh-server",
+        "username": "admin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:00:30",
+        "event_type": "successful_login",
+        "source_ip": "192.168.1.10",
+        "target_service": "ssh-server",
+        "username": "admin",
+        "severity": "high"
+    },
+    {
+        "timestamp": "2026-03-06T10:01:00",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.20",
+        "target_service": "ssh-server",
+        "username": "root",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:01:05",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.20",
+        "target_service": "ftp-server",
+        "username": "root",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:01:10",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.20",
+        "target_service": "web-server",
+        "username": "root",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:01:15",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.20",
+        "target_service": "database-server",
+        "username": "root",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:01:20",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.20",
+        "target_service": "mail-server",
+        "username": "root",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:02:00",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.30",
+        "target_service": "ssh-server",
+        "username": "admin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:02:05",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.30",
+        "target_service": "ssh-server",
+        "username": "guest",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:02:10",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.30",
+        "target_service": "ssh-server",
+        "username": "test",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:02:15",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.30",
+        "target_service": "ssh-server",
+        "username": "user",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:02:20",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.30",
+        "target_service": "ssh-server",
+        "username": "administrator",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:03:00",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.40",
+        "target_service": "web-server",
+        "username": "admin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:03:05",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.40",
+        "target_service": "web-server",
+        "username": "admin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:03:10",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.40",
+        "target_service": "web-server",
+        "username": "admin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:03:15",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.40",
+        "target_service": "web-server",
+        "username": "admin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:04:00",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.50",
+        "target_service": "ftp-server",
+        "username": "guest",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:04:05",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.50",
+        "target_service": "ftp-server",
+        "username": "anonymous",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:04:10",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.50",
+        "target_service": "ftp-server",
+        "username": "test",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:04:15",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.50",
+        "target_service": "ftp-server",
+        "username": "backup",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:05:00",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.60",
+        "target_service": "database-server",
+        "username": "dbadmin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:05:05",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.60",
+        "target_service": "database-server",
+        "username": "dbadmin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:05:10",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.60",
+        "target_service": "database-server",
+        "username": "dbadmin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:05:15",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.60",
+        "target_service": "database-server",
+        "username": "dbadmin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:05:20",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.60",
+        "target_service": "database-server",
+        "username": "dbadmin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:06:00",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.70",
+        "target_service": "mail-server",
+        "username": "admin",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:06:05",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.70",
+        "target_service": "mail-server",
+        "username": "root",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:06:10",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.70",
+        "target_service": "mail-server",
+        "username": "test",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:06:15",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.70",
+        "target_service": "mail-server",
+        "username": "user",
+        "severity": "medium"
+    },
+    {
+        "timestamp": "2026-03-06T10:06:20",
+        "event_type": "failed_login",
+        "source_ip": "192.168.1.70",
+        "target_service": "mail-server",
+        "username": "guest",
+        "severity": "medium"
     }
 ]
