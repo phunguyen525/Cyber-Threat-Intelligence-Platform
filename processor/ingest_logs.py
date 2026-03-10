@@ -12,6 +12,9 @@ SERVICE_SCAN_THRESHOLD = 3
 PASSWORD_SPRAY_THRESHOLD = 3
 TIME_WINDOW_SECONDS = 60
 
+FAILED_BEFORE_SUCCESS_THRESHOLD = 3
+SUCCESS_WINDOW_SECONDS = 60
+
 driver = GraphDatabase.driver(URI, auth=(USERNAME, PASSWORD))
 
 
@@ -141,6 +144,34 @@ def has_distinct_usernames_within_window(events, threshold, window_seconds):
     return False, set(), None
 
 
+def has_suspicious_success_after_failures(events, fail_threshold, window_seconds):
+    events = sorted(events, key=lambda x: x[0])
+
+    for i in range(len(events)):
+        timestamp_i, event_type_i = events[i]
+
+        if event_type_i != "successful_login":
+            continue
+
+        success_time = timestamp_i
+        failed_count = 0
+
+        for j in range(i - 1, -1, -1):
+            prev_time, prev_type = events[j]
+            delta = (success_time - prev_time).total_seconds()
+
+            if delta > window_seconds:
+                break
+
+            if prev_type == "failed_login":
+                failed_count += 1
+
+        if failed_count >= fail_threshold:
+            return True, failed_count, success_time
+
+    return False, 0, None
+
+
 def main():
     with open("data/sample_logs.json", "r") as f:
         logs = json.load(f)
@@ -148,6 +179,7 @@ def main():
     failed_login_by_ip_service = defaultdict(list)
     service_events_by_ip = defaultdict(list)
     username_events_by_ip_service = defaultdict(list)
+    auth_events_by_ip_service_user = defaultdict(list)
 
     try:
         with driver.session() as session:
@@ -159,6 +191,8 @@ def main():
                 username = log["username"]
                 event_type = log["event_type"]
                 timestamp = datetime.fromisoformat(log["timestamp"])
+
+                auth_events_by_ip_service_user[(ip, service, username)].append((timestamp, event_type))
 
                 if event_type == "failed_login":
                     failed_login_by_ip_service[(ip, service)].append(timestamp)
@@ -236,7 +270,34 @@ def main():
                     )
                     print(f"[ALERT] Password spraying detected from {ip} on {service}")
 
-        print("Phase 3 completed.")
+            # 4. Suspicious success after failures
+            for (ip, service, username), events in auth_events_by_ip_service_user.items():
+                detected, failed_count, success_time = has_suspicious_success_after_failures(
+                    events,
+                    FAILED_BEFORE_SUCCESS_THRESHOLD,
+                    SUCCESS_WINDOW_SECONDS
+                )
+
+                if detected:
+                    details = (
+                        f"{failed_count} failed logins followed by successful login within "
+                        f"{SUCCESS_WINDOW_SECONDS}s on {service} for username {username}, "
+                        f"success at {success_time.isoformat()}"
+                    )
+                    session.execute_write(
+                        insert_threat,
+                        "SuspiciousSuccessAfterFailures",
+                        ip,
+                        service,
+                        [username],
+                        details,
+                    )
+                    print(
+                        f"[ALERT] Suspicious success after failures detected from {ip} "
+                        f"on {service} for {username}"
+                    )
+
+        print("Phase 4 completed.")
 
     finally:
         driver.close()
