@@ -1,5 +1,6 @@
 import json
 from collections import defaultdict
+from datetime import datetime
 from neo4j import GraphDatabase
 
 URI = "bolt://localhost:7687"
@@ -9,6 +10,7 @@ PASSWORD = "Phu05022005@"
 BRUTE_FORCE_THRESHOLD = 3
 SERVICE_SCAN_THRESHOLD = 3
 PASSWORD_SPRAY_THRESHOLD = 3
+TIME_WINDOW_SECONDS = 60
 
 driver = GraphDatabase.driver(URI, auth=(USERNAME, PASSWORD))
 
@@ -76,13 +78,76 @@ def insert_threat(tx, threat_type, ip, service=None, usernames=None, details=Non
             )
 
 
+def has_threshold_within_window(timestamps, threshold, window_seconds):
+    timestamps = sorted(timestamps)
+
+    for i in range(len(timestamps)):
+        count = 1
+        window_start = timestamps[i]
+
+        for j in range(i + 1, len(timestamps)):
+            delta = (timestamps[j] - window_start).total_seconds()
+
+            if delta <= window_seconds:
+                count += 1
+            else:
+                break
+
+        if count >= threshold:
+            return True, count, window_start
+
+    return False, 0, None
+
+
+def has_distinct_services_within_window(events, threshold, window_seconds):
+    events = sorted(events, key=lambda x: x[0])
+
+    for i in range(len(events)):
+        window_start = events[i][0]
+        distinct_services = {events[i][1]}
+
+        for j in range(i + 1, len(events)):
+            delta = (events[j][0] - window_start).total_seconds()
+
+            if delta <= window_seconds:
+                distinct_services.add(events[j][1])
+            else:
+                break
+
+        if len(distinct_services) >= threshold:
+            return True, distinct_services, window_start
+
+    return False, set(), None
+
+
+def has_distinct_usernames_within_window(events, threshold, window_seconds):
+    events = sorted(events, key=lambda x: x[0])
+
+    for i in range(len(events)):
+        window_start = events[i][0]
+        distinct_usernames = {events[i][1]}
+
+        for j in range(i + 1, len(events)):
+            delta = (events[j][0] - window_start).total_seconds()
+
+            if delta <= window_seconds:
+                distinct_usernames.add(events[j][1])
+            else:
+                break
+
+        if len(distinct_usernames) >= threshold:
+            return True, distinct_usernames, window_start
+
+    return False, set(), None
+
+
 def main():
     with open("data/sample_logs.json", "r") as f:
         logs = json.load(f)
 
-    failed_login_by_ip_service = defaultdict(int)
-    services_by_ip = defaultdict(set)
-    usernames_by_ip_service = defaultdict(set)
+    failed_login_by_ip_service = defaultdict(list)
+    service_events_by_ip = defaultdict(list)
+    username_events_by_ip_service = defaultdict(list)
 
     try:
         with driver.session() as session:
@@ -93,16 +158,26 @@ def main():
                 service = log["target_service"]
                 username = log["username"]
                 event_type = log["event_type"]
-
-                services_by_ip[ip].add(service)
+                timestamp = datetime.fromisoformat(log["timestamp"])
 
                 if event_type == "failed_login":
-                    failed_login_by_ip_service[(ip, service)] += 1
-                    usernames_by_ip_service[(ip, service)].add(username)
+                    failed_login_by_ip_service[(ip, service)].append(timestamp)
+                    service_events_by_ip[ip].append((timestamp, service))
+                    username_events_by_ip_service[(ip, service)].append((timestamp, username))
 
-            for (ip, service), count in failed_login_by_ip_service.items():
-                if count >= BRUTE_FORCE_THRESHOLD:
-                    details = f"{count} failed logins detected on {service}"
+            # 1. Brute force
+            for (ip, service), timestamps in failed_login_by_ip_service.items():
+                detected, count, window_start = has_threshold_within_window(
+                    timestamps,
+                    BRUTE_FORCE_THRESHOLD,
+                    TIME_WINDOW_SECONDS
+                )
+
+                if detected:
+                    details = (
+                        f"{count} failed logins within {TIME_WINDOW_SECONDS}s "
+                        f"on {service}, starting at {window_start.isoformat()}"
+                    )
                     session.execute_write(
                         insert_threat,
                         "BruteForceAttack",
@@ -113,9 +188,20 @@ def main():
                     )
                     print(f"[ALERT] Brute force detected from {ip} on {service}")
 
-            for ip, services in services_by_ip.items():
-                if len(services) >= SERVICE_SCAN_THRESHOLD:
-                    details = f"Targeted {len(services)} distinct services: {', '.join(sorted(services))}"
+            # 2. Service scanning
+            for ip, events in service_events_by_ip.items():
+                detected, services, window_start = has_distinct_services_within_window(
+                    events,
+                    SERVICE_SCAN_THRESHOLD,
+                    TIME_WINDOW_SECONDS
+                )
+
+                if detected:
+                    details = (
+                        f"Targeted {len(services)} distinct services within "
+                        f"{TIME_WINDOW_SECONDS}s starting at {window_start.isoformat()}: "
+                        f"{', '.join(sorted(services))}"
+                    )
                     session.execute_write(
                         insert_threat,
                         "ServiceScanning",
@@ -126,9 +212,20 @@ def main():
                     )
                     print(f"[ALERT] Service scanning detected from {ip}")
 
-            for (ip, service), usernames in usernames_by_ip_service.items():
-                if len(usernames) >= PASSWORD_SPRAY_THRESHOLD:
-                    details = f"Tried {len(usernames)} distinct usernames on {service}"
+            # 3. Password spraying
+            for (ip, service), events in username_events_by_ip_service.items():
+                detected, usernames, window_start = has_distinct_usernames_within_window(
+                    events,
+                    PASSWORD_SPRAY_THRESHOLD,
+                    TIME_WINDOW_SECONDS
+                )
+
+                if detected:
+                    details = (
+                        f"Tried {len(usernames)} distinct usernames within "
+                        f"{TIME_WINDOW_SECONDS}s on {service}, starting at "
+                        f"{window_start.isoformat()}"
+                    )
                     session.execute_write(
                         insert_threat,
                         "PasswordSpraying",
@@ -139,7 +236,7 @@ def main():
                     )
                     print(f"[ALERT] Password spraying detected from {ip} on {service}")
 
-        print("Phase 2 detection completed.")
+        print("Phase 3 completed.")
 
     finally:
         driver.close()
