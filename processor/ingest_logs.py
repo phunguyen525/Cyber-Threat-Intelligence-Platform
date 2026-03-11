@@ -2,6 +2,7 @@ import json
 import time
 from collections import defaultdict
 from datetime import datetime
+from confluent_kafka import Consumer
 from neo4j import GraphDatabase
 
 RED = "\033[91m"
@@ -10,6 +11,10 @@ RESET = "\033[0m"
 URI = "bolt://localhost:7687"
 USERNAME = "neo4j"
 PASSWORD = "Phu05022005@"
+
+KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
+KAFKA_TOPIC = "security_logs"
+KAFKA_GROUP_ID = "threat-detector-group-v2"
 
 BRUTE_FORCE_THRESHOLD = 3
 SERVICE_SCAN_THRESHOLD = 3
@@ -179,8 +184,14 @@ def has_suspicious_success_after_failures(events, fail_threshold, window_seconds
 
 
 def main():
-    with open("data/sample_logs.json", "r") as f:
-        logs = json.load(f)
+    consumer = Consumer(
+        {
+            "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
+            "group.id": KAFKA_GROUP_ID,
+            "auto.offset.reset": "earliest",
+        }
+    )
+    consumer.subscribe([KAFKA_TOPIC])
 
     failed_login_by_ip_service = defaultdict(list)
     service_events_by_ip = defaultdict(list)
@@ -194,7 +205,20 @@ def main():
 
     try:
         with driver.session() as session:
-            for log in logs:
+            print("Consumer started. Waiting for Kafka messages....")
+
+            while True:
+                msg = consumer.poll(1)
+
+                if msg is None:
+                    continue
+
+                if msg.error():
+                    print(f"[ERROR] Kafka consumer error: {msg.error()}")
+                    continue
+
+                log = json.loads(msg.value().decode("utf-8"))
+
                 session.execute_write(insert_log, log)
 
                 ip = log["source_ip"]
@@ -319,11 +343,11 @@ def main():
                             f"from {ip} on {service} for {username}"
                         )
 
-                time.sleep(SIMULATION_DELAY_SECONDS)
-
-        print("Phase 5 completed.")
+    except KeyboardInterrupt:
+        print("Stopping consumer....")
 
     finally:
+        consumer.close()
         driver.close()
 
 
