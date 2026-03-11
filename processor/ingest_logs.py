@@ -1,7 +1,11 @@
 import json
+import time
 from collections import defaultdict
 from datetime import datetime
 from neo4j import GraphDatabase
+
+RED = "\033[91m"
+RESET = "\033[0m"
 
 URI = "bolt://localhost:7687"
 USERNAME = "neo4j"
@@ -14,6 +18,8 @@ TIME_WINDOW_SECONDS = 60
 
 FAILED_BEFORE_SUCCESS_THRESHOLD = 3
 SUCCESS_WINDOW_SECONDS = 60
+
+SIMULATION_DELAY_SECONDS = 0.5
 
 driver = GraphDatabase.driver(URI, auth=(USERNAME, PASSWORD))
 
@@ -181,6 +187,11 @@ def main():
     username_events_by_ip_service = defaultdict(list)
     auth_events_by_ip_service_user = defaultdict(list)
 
+    detected_bruteforce = set() #(ip, service)
+    detected_service_scanning = set() #ip
+    detected_password_spraying = set() # (ip, service)
+    detected_suspicious_success = set() #(ip, service, username)
+
     try:
         with driver.session() as session:
             for log in logs:
@@ -192,6 +203,11 @@ def main():
                 event_type = log["event_type"]
                 timestamp = datetime.fromisoformat(log["timestamp"])
 
+                print(
+                    f"[EVENT] {log['timestamp']} | {event_type} | "
+                    f"IP={ip} | Service={service} | User={username}"
+                )
+
                 auth_events_by_ip_service_user[(ip, service, username)].append((timestamp, event_type))
 
                 if event_type == "failed_login":
@@ -200,104 +216,112 @@ def main():
                     username_events_by_ip_service[(ip, service)].append((timestamp, username))
 
             # 1. Brute force
-            for (ip, service), timestamps in failed_login_by_ip_service.items():
-                detected, count, window_start = has_threshold_within_window(
-                    timestamps,
-                    BRUTE_FORCE_THRESHOLD,
-                    TIME_WINDOW_SECONDS
-                )
+                if (ip, service) not in detected_bruteforce:
+                    timestamps = failed_login_by_ip_service[(ip, service)]
+                    detected, count, window_start = has_threshold_within_window(
+                        timestamps,
+                        BRUTE_FORCE_THRESHOLD,
+                        TIME_WINDOW_SECONDS
+                    )
 
-                if detected:
-                    details = (
-                        f"{count} failed logins within {TIME_WINDOW_SECONDS}s "
-                        f"on {service}, starting at {window_start.isoformat()}"
-                    )
-                    session.execute_write(
-                        insert_threat,
-                        "BruteForceAttack",
-                        ip,
-                        service,
-                        None,
-                        details,
-                    )
-                    print(f"[ALERT] Brute force detected from {ip} on {service}")
+                    if detected:
+                        details = (
+                            f"{count} failed logins within {TIME_WINDOW_SECONDS}s "
+                            f"on {service}, starting at {window_start.isoformat()}"
+                        )
+                        session.execute_write(
+                            insert_threat,
+                            "BruteForceAttack",
+                            ip,
+                            service,
+                            None,
+                            details,
+                        )
+                        detected_bruteforce.add((ip,service))
+                        print(f"{RED}[ALERT]{RESET} Brute force detected from {ip} on {service}")
 
             # 2. Service scanning
-            for ip, events in service_events_by_ip.items():
-                detected, services, window_start = has_distinct_services_within_window(
-                    events,
-                    SERVICE_SCAN_THRESHOLD,
-                    TIME_WINDOW_SECONDS
-                )
-
-                if detected:
-                    details = (
-                        f"Targeted {len(services)} distinct services within "
-                        f"{TIME_WINDOW_SECONDS}s starting at {window_start.isoformat()}: "
-                        f"{', '.join(sorted(services))}"
+                if ip not in detected_service_scanning:
+                    events = service_events_by_ip[ip]
+                    detected, services, window_start = has_distinct_services_within_window(
+                        events,
+                        SERVICE_SCAN_THRESHOLD,
+                        TIME_WINDOW_SECONDS
                     )
-                    session.execute_write(
-                        insert_threat,
-                        "ServiceScanning",
-                        ip,
-                        None,
-                        None,
-                        details,
-                    )
-                    print(f"[ALERT] Service scanning detected from {ip}")
 
-            # 3. Password spraying
-            for (ip, service), events in username_events_by_ip_service.items():
-                detected, usernames, window_start = has_distinct_usernames_within_window(
-                    events,
-                    PASSWORD_SPRAY_THRESHOLD,
-                    TIME_WINDOW_SECONDS
-                )
-
-                if detected:
-                    details = (
-                        f"Tried {len(usernames)} distinct usernames within "
-                        f"{TIME_WINDOW_SECONDS}s on {service}, starting at "
-                        f"{window_start.isoformat()}"
+                    if detected:
+                        details = (
+                            f"Targeted {len(services)} distinct services within "
+                            f"{TIME_WINDOW_SECONDS}s starting at {window_start.isoformat()}: "
+                            f"{', '.join(sorted(services))}"
+                        )
+                        session.execute_write(
+                            insert_threat,
+                            "ServiceScanning",
+                            ip,
+                            None,
+                            None,
+                            details,
+                        )
+                        detected_service_scanning.add(ip)
+                        print(f"{RED}[ALERT]{RESET} Service scanning detected from {ip}")
+            # 3. Password Spraying
+                if (ip, service) not in detected_password_spraying:
+                    events = username_events_by_ip_service[(ip, service)]
+                    detected, usernames, window_start = has_distinct_usernames_within_window(
+                        events,
+                        PASSWORD_SPRAY_THRESHOLD,
+                        TIME_WINDOW_SECONDS
                     )
-                    session.execute_write(
-                        insert_threat,
-                        "PasswordSpraying",
-                        ip,
-                        service,
-                        sorted(list(usernames)),
-                        details,
-                    )
-                    print(f"[ALERT] Password spraying detected from {ip} on {service}")
 
+                    if detected:
+                        details = (
+                            f"Tried {len(usernames)} distinct usernames within "
+                            f"{TIME_WINDOW_SECONDS}s on {service}, starting at "
+                            f"{window_start.isoformat()}"
+                        )
+                        session.execute_write(
+                            insert_threat,
+                            "PasswordSpraying",
+                            ip,
+                            service,
+                            sorted(list(usernames)),
+                            details,
+                        )
+                        detected_password_spraying.add((ip, service))
+                        print(f"{RED}[ALERT]{RESET} Password spraying detected from {ip} on {service}")
             # 4. Suspicious success after failures
-            for (ip, service, username), events in auth_events_by_ip_service_user.items():
-                detected, failed_count, success_time = has_suspicious_success_after_failures(
-                    events,
-                    FAILED_BEFORE_SUCCESS_THRESHOLD,
-                    SUCCESS_WINDOW_SECONDS
-                )
-
-                if detected:
-                    details = (
-                        f"{failed_count} failed logins followed by successful login within "
-                        f"{SUCCESS_WINDOW_SECONDS}s on {service} for username {username}, "
-                        f"success at {success_time.isoformat()}"
-                    )
-                    session.execute_write(
-                        insert_threat,
-                        "SuspiciousSuccessAfterFailures",
-                        ip,
-                        service,
-                        [username],
-                        details,
-                    )
-                    print(
-                        f"[ALERT] Suspicious success after failures detected from {ip} "
-                        f"on {service} for {username}"
+                if (ip, service, username) not in detected_suspicious_success:
+                    events = auth_events_by_ip_service_user[(ip, service, username)]
+                    detected, failed_count, success_time = has_suspicious_success_after_failures(
+                        events,
+                        FAILED_BEFORE_SUCCESS_THRESHOLD,
+                        SUCCESS_WINDOW_SECONDS
                     )
 
-        print("Phase 4 completed.")
+                    if detected:
+                        details = (
+                            f"{failed_count} failed logins followed by successful login within "
+                            f"{SUCCESS_WINDOW_SECONDS}s on {service} for username {username}, "
+                            f"success at {success_time.isoformat()}"
+                        )
+                        session.execute_write(
+                            insert_threat,
+                            "SuspiciousSuccessAfterFailures",
+                            ip,
+                            service,
+                            [username],
+                            details,
+                        )
+                        detected_suspicious_success.add((ip, service, username))
+                        print(
+                            f"{RED}[ALERT]{RESET} Suspicious success after failures detected "
+                            f"from {ip} on {service} for {username}"
+                        )
+
+                time.sleep(SIMULATION_DELAY_SECONDS)
+
+        print("Phase 5 completed.")
 
     finally:
         driver.close()
